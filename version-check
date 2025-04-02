@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+source "$(dirname "$(readlink -f "$0")")"/functions.sh
+
+########################################################################################################################
+# Global variables"
+
+VERSION="0.1.0"
+
+DEBUG=0
+OUTPUT_TYPE=0
+OUTPUT_BUILD_TYPE=0
+
+version_release='^v?[0-9]+\.[0-9]+\.[0-9]+$'
+version_prerelease='^v?[0-9]+\.[0-9]+\.[0-9]+(\-|\~)(alpha|beta|rc|pre)(\.[0-9]+|\_[a-zA-Z]+(\.[0-9]+)*)*$'
+version_postrelease='^v?[0-9]+\.[0-9]+\.[0-9]+\.(fix|next|post)(\.[0-9]+|\_[a-zA-Z]+(\.[0-9]+)*)*$'
+version_intermediate='^v?[0-9]+\.[0-9]+\.[0-9]+\_[a-zA-Z]+(\.[0-9]+|\_[a-zA-Z]+(\.[0-9]+)*)*$'
+
+declare -ri EQUAL=0
+declare -ri GREATEST=1
+declare -ri LEAST=2
+declare -ri CMPERR=3
+
+########################################################################################################################
+# Help usage
+
+function help {
+cat << EOF
+${SCRIPT_NAME} ${VERSION} checks version is correct according to regexp rules
+exit 0 on success, 1 on version is incorrect
+
+Usage: 
+    ${SCRIPT_NAME} [-h|--help] [-v|--version] version
+   
+Options:
+    -h|--help           print this help and exit
+    -V|--version        print version number and exit
+    -v|--verbose        verbose output
+    -r|--rules          print regexp rules for check versions and exit
+    -d|--debug          debug output
+    -t|--type           output version type: release, prerelease, postrelease, intermediate
+    -b|--build-type     output build type for cmake: Release for release version, Debug for other
+    --no-color          no colored output
+Arguments:
+    version             version string to check
+EOF
+}
+
+########################################################################################################################
+# Parse command line arguments
+
+function parse_cmd_args() {
+    while :; do
+        case "${1-}" in
+            -h|--help)
+               help
+               exit 0
+               ;;
+            -V)
+               lg "${VERSION}"
+               exit 0
+               ;;
+            --version)
+               lg "${SCRIPT_NAME} ${VERSION}"
+               exit
+               ;;
+            -v|--verbose)
+               set -x 
+               ;;
+            -d|--debug)
+               DEBUG=1
+               ;;
+            -t|--type)
+               OUTPUT_TYPE=1
+               ;;
+            -b|--buid-type)
+               OUTPUT_BUILD_TYPE=1
+               ;;
+            -r|--rules)
+               rules_print
+               ;;
+            -no-color)
+               NO_COLOR=1
+               setup_colors
+               ;;
+            -V|--version)
+               echo $VERSION
+               exit 0
+               ;;
+            -?*)
+               le "wrong option: ${1-}"
+               help
+               exit 1
+               ;;
+            *)
+               check_version ${1-}
+               break ;;
+        esac
+        shift
+    done
+
+    le "${red}no arguments provided, see help${clre}"
+    exit 1
+}
+
+########################################################################################################################
+# Script functions
+
+# compare versions
+# usage: compare_versions version1 version2
+# result returns into $? variable
+function compare_versions() {
+    local v1="${1}"
+    local v2="${2}"
+    if [[ "${v1}" == "${v2}" ]]; then
+        # v1 == v2, v1 and v2 are equal
+        return $EQUAL
+    fi
+
+    local least=$(for v in $(echo "${v1} ${v2}"); do echo "${v}"; done | sort -V | head -1)
+    if [[ "${least}" == "${v1}" ]]; then
+        # v1 < v2, v1 is least
+        return $LEAST
+    fi
+
+    if [[ "${least}" == "${v2}" ]]; then
+        # v1 > v2, v1 is greatest
+        return $GREATEST
+    fi
+
+    return $CMERR
+}
+
+function check_version {
+    version=${1-}
+    ld "check version '${version}'"
+    if [[ -z "${version}" ]]; then
+        le "no version argument provided"
+        exit 1
+    fi
+    if [[ "${version}" =~ $version_release ]]; then
+        ld "version ${version} is release"
+        if [[ ${OUTPUT_TYPE} -eq 1 ]]; then
+            echo 'Release'
+        fi
+        if [[ ${OUTPUT_BUILD_TYPE} -eq 1 ]]; then
+            echo 'Release'
+        fi
+        exit 0
+    fi
+    if [[ "${version}" =~ $version_prerelease ]]; then
+        ld "version ${version} is pre release"
+        if [[ ${OUTPUT_TYPE} -eq 1 ]]; then
+            echo 'Pre release'
+        fi
+        if [[ ${OUTPUT_BUILD_TYPE} -eq 1 ]]; then
+            echo 'Debug'
+        fi
+        exit 0
+    fi
+    if [[ "${version}" =~ $version_postrelease ]]; then
+        ld "version ${version} is post release"
+        if [[ ${OUTPUT_TYPE} -eq 1 ]]; then
+            echo 'Post release'
+        fi
+        if [[ ${OUTPUT_BUILD_TYPE} -eq 1 ]]; then
+            echo 'Debug'
+        fi
+        exit 0
+    fi
+    if [[ "${version}" =~ $version_intermediate ]]; then
+        ld "version ${version} is intermediate"
+        if [[ ${OUTPUT_TYPE} -eq 1 ]]; then
+            echo 'Intermediate release'
+        fi
+        if [[ ${OUTPUT_BUILD_TYPE} -eq 1 ]]; then
+            echo 'Debug'
+        fi
+        exit 0
+    fi
+    le "wrong version '$version'"
+    exit 1
+}
+
+function rules_print {
+    lg "version rules in precedence order:"
+    lg "    release:      $version_release"
+    lg "    prerelease:   $version_prerelease"
+    lg "    postrelease:  $version_postrelease"
+    lg "    intermediate: $version_intermediate"
+    exit 0
+}
+
+########################################################################################################################
+# Main
+
+parse_cmd_args "$@"
+
+########################################################################################################################
+########################################################################################################################

@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+source "$(dirname "$(readlink -e "$0")")"/functions.sh
+
+########################################################################################################################
+# Global variables"
+
+VERSION="0.1.0"
+
+CPPCHECK_VERSION_DEFAULT="2.16.0"
+CPPCHECK_PREFIX_DEFAULT="/usr/local"
+CPPCHECK_OPTIONS_DEFAULT="--enable=all --inconclusive --error-exitcode=1 --check-level=exhaustive "\
+    "--force --checkers-report=cppcheck_report.txt"
+CPPCHECK_INCLUDE_FILE_DEFAULT="cppcheck_include.txt"
+CPPCHECK_SUPPRESS_FILE_DEFAULT="cppcheck_suppress.txt"
+
+########################################################################################################################
+# Help usage
+function help() {
+cat << EOF
+${SCRIPT_NAME} ${VERSION} run cppchek on source code
+
+Usage: 
+    ${SCRIPT_NAME} [options] [check [dir...]|install]
+
+Options:
+    -h|--help           print help and exit
+    -V|--version        print version and exit
+    -v|--verbose        verbose outout, bash debug
+    -d|--debug          debug output
+    --prefix            install prefix for cppcheck
+    --cppcheck-version  version of cppcheck to install, default ${CPPCHECK_VERSION_DEFAULT}
+
+Arguments:
+    check [dir...]      check source code in directories, default check src
+    install             install cppcheck version at prefix directory
+
+Environment
+    CPPCHECK_VERSION        version of cppcheck to install, default '${CPPCHECK_VERSION_DEFAULT}'
+    CPPCHECK_PREFIX         install prefix for cppcheck, default '${CPPCHECK_PREFIX_DEFAULT}'
+    CPPCHECK_OPTIONS        cppcheck options, default '${CPPCHECK_OPTIONS_DEFAULT}'
+    CPPCHECK_INCLUDES       include directories for source code
+    CPPCHECK_INCLUDE_FILE   file with definitions, default is '${CPPCHECK_INCLUDE_FILE_DEFAULT}'
+    CPPCHECK_SUPPRESS_FILE  suppress cppcheck file, default is '${CPPCHECK_SUPPRESS_FILE_DEFAULT}' 
+EOF
+}
+
+########################################################################################################################
+# Prse command line options
+
+function parse_cmd_args() {
+    while :; do
+        case "${1-}" in
+            -h|--help)
+                help
+                exit 0
+                ;;
+            -V)
+                lg "${VERSION}"
+                exit 0
+                ;;
+            --version)
+                lg "${SCRIPT_NAME} ${VERSION}"
+                exit 0
+                ;;
+            -v|--verbose)
+                set -x
+                ;;
+            -d|--debug)
+                DEBUG=1
+                ;;
+            --prefix)
+                shift
+                CPPCHECK_PREFIX=$1
+                ;;
+            --cppcheck-version)
+                shift
+                CPPCHECK_VERSION=$1
+                ;;
+            *)
+                break ;;
+        esac
+        shift
+    done
+
+    args=("$@")
+}
+
+########################################################################################################################
+# Script functions
+
+function cleanup() {
+    if [[ ! -z "${CPPCHECK_DIR-}" && -d "${CPPCHECK_DIR}" ]]; then
+        rm -fr ${CPPCHECK_DIR}
+    fi
+    if [[ ! -z "${CPPCHECK_ZIP-}" && -f "${CPPCHECK_ZIP}" ]]; then
+        rm -f ${CPPCHECK_ZIP}
+    fi
+}
+
+function install_cppcheck() {
+    CPPCHECK_VERSION="${CPPCHECK_VERSION-${CPPCHECK_VERSION_DEFAULT}}"
+    CPPCHECK_DIR=cppcheck-${CPPCHECK_VERSION}
+    CPPCHECK_ZIP=cppcheck-${CPPCHECK_VERSION}.zip
+
+    WGET_CMD=$(which wget)
+    if [[ -z "${WGET_CMD}" ]]; then
+        le "wget not installed, could not download cppcheck"
+        exit 1
+    fi
+
+    UNZIP_CMD=$(which unzip)
+    if [[ -z "${UNZIP_CMD}" ]]; then
+        le "unzip not installed, could not install cppcheck"
+        exit 1
+    fi
+    
+    CMAKE_CMD=$(which cmake)
+    if [[ -z "${CMAKE_CMD}" ]]; then
+        le "cmake not installed, could not install cppcheck"
+        exit 1
+    fi
+
+    if [[ ! -f ${CPPCHECK_ZIP} ]]; then
+        lg "downloading ${CPPCHECK_ZIP}"
+        ${WGET_CMD} --quiet -O "${CPPCHECK_ZIP}" https://github.com/danmar/cppcheck/archive/${CPPCHECK_VERSION}.zip
+    fi
+
+    if [[ -d "${CPPCHECK_DIR}" ]]; then
+        rm -fr "${CPPCHECK_DIR}"
+    fi
+    lg "unpack ${CPPCHECK_ZIP}"
+    ${UNZIP_CMD} -qq "${CPPCHECK_ZIP}"
+    cd "${CPPCHECK_DIR}"
+    lg "build cppcheck"
+    ${CMAKE_CMD} -H. -Bbuild -DCMAKE_INSTALL_PREFIX=${CPPCHECK_PREFIX}
+    ${CMAKE_CMD} --build build
+    ${CMAKE_CMD} --install build
+    if [[ ! -e "${CPPCHECK_PREFIX}/bin/cppcheck" ]]; then
+        le "fail install cppcheck ${CPPCHECK_VERSION}"
+        exit 1
+    fi
+    installed_version=$(${CPPCHECK_PREFIX}/bin/cppcheck --version)
+    if [[ -z "${installed_version}" || ${installed_version} =~ "/^${CPPCHECK_VERSION}/" ]]; then
+        le "fail install cppcheck ${CPPCHECK_VERSION}, ${CPPCHECK_PREFIX}/bin/cppcheck --version returns another version ${installed_version}"
+        exit 1
+    fi
+    cleanup
+    lr "cppcheck ${CPPCHECK_VERSION} installed into ${CPPCHECK_PREFIX}"
+    exit 0
+}
+
+########################################################################################################################
+# Main
+
+parse_cmd_args "$@"
+
+CPPCHECK_PREFIX=${CPPCHECK_PREFIX-${CPPCHECK_PREFIX_DEFAULT}}
+CPPCHECK_CMD=${CPPCHECK_PREFIX}/bin/cppcheck
+CPPCHECK_OPTIONS="${CPPCHECK_OPTIONS-${CPPCHECK_OPTIONS_DEFAULT}}"
+CPPCHECK_INCLUDE_FILE="${CPPCHECK_INCLUDE_FILE-${CPPCHECK_INCLUDE_FILE_DEFAULT}}"
+CPPCHECK_SUPPRESS_FILE="${CPPCHECK_SUPPRESS_FILE-${CPPCHECK_SUPPRESS_FILE_DEFAULT}}"
+
+if [[ ! -z "${args[0]-}" ]]; then
+    if [[ "${args[0]}" == "install" ]]; then
+        install_cppcheck
+    fi
+fi
+
+if [[ ! -e ${CPPCHECK_CMD} ]]; then
+    le "cppcheck is not installed";
+    exit 1
+fi
+
+cd ${PROJECT_DIR}
+
+if [[ -z "${CPPCHECK_INCLUDES-}" ]]; then
+    if [[ -d "src/include" ]]; then
+        CPPCHECK_INCLUDES="${CPPCHECK_INCLUDES-} -I src/include/"
+    fi
+    if [[ -d "include" ]]; then
+        CPPCHECK_INCLUDES="${CPPCHECK_INCLUDES-} -I include/"
+    fi
+    if [[ -f "${CPPCHECK_INCLUDE_FILE}" ]]; then
+        CPPCHECK_INCLUDES="${CPPCHECK_INCLUDES-} --include=${CPPCHECK_INCLUDE_FILE}"
+    fi
+fi;
+
+if [[ -f "${CPPCHECK_SUPPRESS_FILE}" ]]; then 
+    CPPCHECK_SUPPRESS="--suppressions-list=${CPPCHECK_SUPPRESS_FILE}"
+fi
+if [[ -z "${CPPCHECK_SUPPRESS-}" && -f "${PROJECT_DIR}/${CPPCHECK_SUPPRESS_FILE}" ]]; then
+    CPPCHECK_SUPPRESS="--suppressions-list="${PROJECT_DIR}/${CPPCHECK_SUPPRESS_FILE}""
+fi
+if [[ -z "${CPPCHECK_SUPPRESS-}" && -f "${SCRIPT_DIR}/${CPPCHECK_SUPPRESS_FILE}" ]]; then
+    CPPCHECK_SUPPRESS="--suppressions-list="${SCRIPT_DIR}/${CPPCHECK_SUPPRESS_FILE}""
+fi
+
+if [[ ${#args[@]} -eq 0 ]]; then
+    CPPCHECK_SOURCES="$(find src -type d)"
+else
+    CPPCHECK_SOURCES="$(find ${args[@]} -type d)"
+fi
+
+set +e
+rc=0
+for dir in ${CPPCHECK_SOURCES}; do
+    sources=$(find ${dir} -maxdepth 1 -name *.c* | wc | awk '{print $1}')
+    if [[ ${sources} -gt 1 ]]; then
+        ld "${CPPCHECK_CMD} ${CPPCHECK_OPTIONS} ${CPPCHECK_INCLUDES} ${CPPCHECK_SUPPRESS-} ${dir}"
+        ${CPPCHECK_CMD} ${CPPCHECK_OPTIONS} ${CPPCHECK_INCLUDES} ${CPPCHECK_SUPPRESS-} ${dir}
+        if [[ $? -gt 0 ]]; then
+            rc=1
+        fi
+    fi
+done
+if [[ ${rc} -gt 0 ]]; then
+    echo -e "${red}cppcheck found errors, fix the code${clre}"
+    exit 1
+fi
+exit 0

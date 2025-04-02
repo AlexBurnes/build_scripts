@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Minimal bash script implementation, based on
+#   (https://github.com/ralish/bash-script-template)[Bash script template]
+#   (https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/)[Safer bash scrtipts with set -Eeuo pipefail]
+########################################################################################################################
+# set stricts and traps, this is must be always at beginig of the script
+set -o nounset     # exit if variable is unset
+set -o errexit     # exit on any command error
+set -Eeuo pipefail # exit on pipe fail read
+trap cleanup SIGINT SIGTERM ERR EXIT
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+work_dir=$(pwd -P)
+
+########################################################################################################################
+# Script global variables, add your own here
+DEBUG=0
+VERSION="0.1.0"
+
+########################################################################################################################
+# Help usage
+usage() {
+cat <<EOF
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-f] -p param_value arg1 [arg2...]
+
+Miminal bash script example, version ${VERSION}.
+
+Available options:
+
+    -h, --help      Print this help and exit
+    -V, --version   Print version and exit
+    -v, --verbose   Verbose script output, bash debug
+    -d, --debug     Print script debug info
+    -f, --flag      Some flag description
+    -p, --param     Some param description
+EOF
+    exit 1
+}
+
+########################################################################################################################
+# Parse command line arguments
+
+parse_cmdargs() {
+    # default values of variables set from params
+    flag=0
+    param=''
+
+    while :; do
+        ld "arg ${1-}"
+        case "${1-}" in
+            -h | --help)
+                usage ;;
+            -v | --verbose)
+                set -x ;;
+            -d | --debug)
+                DEBUG=1 ;;
+            -V | --version)
+                version ;;
+            --no-color)
+                NO_COLOR=1 ;;
+            -f | --flag)
+                flag=1 ;; # example flag
+            -p | --param) # example named parameter
+                param="${2-}"
+                shift
+                ;;
+            -?*)
+                die "Unknown option: $1" ;;
+            *)
+                break ;;
+        esac
+            shift
+    done
+
+    args=("$@")
+
+    # check required params and arguments
+    if [[ -z "${param-}" ]]; then
+        le "Missing required parameter: param"
+        usage
+    fi
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        le "Missing script arguments"
+        usage
+    fi
+
+    return 0
+}
+
+########################################################################################################################
+# Version
+version() {
+    echo $VERSION
+    exit 0
+}
+
+########################################################################################################################
+# Cleanup, called at any signal SIGINT SIGTERM ERR EXIT, you could extend it or write you own handlers
+cleanup() {
+    rc=$?
+    # restore default trap handler
+    trap - SIGINT SIGTERM ERR EXIT
+    if [[ "${rc}" -ne 0 ]]; then
+        if [[ "${BASH_COMMAND-}" != "exit ${rc}" ]]; then
+            echo >&2 -e "script '${SCRIPT}' failed on '${BASH_COMMAND-}', exit code ${rc}"
+        fi
+    fi
+    # restore work directory is script is changed it while executing
+    cd ${work_dir}
+    # you script cleanup here
+    exit $rc
+}
+
+########################################################################################################################
+# if terminal is support colors set color variable by color escape sequences
+
+setup_colors() {
+  if [[ -t 2 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
+    clre='\033[0m' red='\033[0;31m' green='\033[0;32m' orange='\033[0;33m' blue='\033[0;34m' purple='\033[0;35m'
+    cyan='\033[0;36m' yellow='\033[1;33m' bold='\e[1m' blink='\e[5m' under='\e[4m'
+  else
+    clre='' red='' green='' orange='' blue='' purple='' cyan='' yellow='' bold='' blink='' under=''
+  fi
+}
+
+########################################################################################################################
+# Output colored functions
+
+ok() {
+    printf " ${green}${bold}ok${clre}"
+}
+
+fail() {
+    printf " ${red}${bold}failed${clre} ${1-}"
+}
+
+warning() {
+    printf " ${purple}${1-}${clre}"
+}
+
+error() {
+    printf "${red}${bold}${1-}${clre}"
+}
+
+########################################################################################################################
+# Logging functions
+
+lg() {
+    echo -e "${1-}"
+}
+
+le() {
+    echo >&2 -e "${red}${bold}ERROR${clre}${red}: ${1-}${clre}"
+}
+
+lw() {
+    echo -e "${purple}WARNING: ${1-}${clre}"
+}
+
+ld() {
+    if [[ ! -z "${DEBUG}" && "${DEBUG}" -gt 0 ]]; then
+        echo -e "${yellow}${bold}#DEBUG${clre}${yellow}: ${1-}${clre}"
+    fi
+}
+
+########################################################################################################################
+# Die
+
+die() {
+    le "$1"
+    exit "${2-1}"
+}
+
+########################################################################################################################
+# setup and parse command line arguments                                                                               
+setup_colors
+parse_cmdargs "$@"
+
+########################################################################################################################
+# Your script logic is here
+
+lg "${red}read parameters:${clre}"
+lg "    - flag: ${flag}"
+lg "    - param: ${param}"
+lg "    - arguments: ${args[*]-}"
+
+#FIXME add examples how work with array, hashes, list them and sort them
+
+########################################################################################################################
+exit 0
+
+########################################################################################################################
+########################################################################################################################

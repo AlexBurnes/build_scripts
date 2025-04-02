@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+source "$(dirname "$(readlink -f "$0")")"/functions.sh
+
+########################################################################################################################
+# global variables 
+
+VERSION="0.1.0"
+
+VALGRIND_OPTIONS="--tool=memcheck --leak-check=full --track-origins=yes"
+
+########################################################################################################################
+# help usage
+
+function help {
+cat <<EOF
+${SCRIPT_NAME} ${VERSION} run valgring to detect memory leaks on executable
+
+Usage: 
+    ${SCRIPT_NAME} [-h|--help] [-v|--version] path/module [args...]
+
+Options:
+    -h|--help           print this help and exit
+    -V|--version        print script version and exit
+    -v|--verbose        verbose output, bash debug
+    -d|--debug          debug output
+    --no-color          no color output
+
+Arguments:
+    path/module         path and name executable to check
+    args                arguments passed to executable
+
+Environments
+    VALGRIND_OPTIONS    options passed to vagrind, defined: '${VALGRIND_OPTIONS}'
+EOF
+}
+
+########################################################################################################################
+# parse command line arguments
+
+function parse_cmd_args() {
+    while :; do
+        case "${1-}" in
+            -h|--help)
+                help
+                exit 0
+                ;;
+            -V)
+                lg "${VERSION}"
+                exit 0
+                ;;
+            --version)
+                lg "${SCRIPT)NAME} ${VERSION}"
+                exit 0
+                ;;
+            -v|--verbose)
+                set -x
+                ;;
+            -d|--debug)
+                DEBUG=1
+                ;;
+            --no-color)
+                NO_COLOR=1
+                setup_colors
+                ;;
+            -?*)
+                le "unknown option: ${1-}"
+                exit 1
+               ;;
+            *)
+                break ;;
+        esac
+        shift
+
+    done
+
+    args=("$@")
+}
+
+########################################################################################################################
+# Main
+
+parse_cmd_args $@
+
+if [[ ${#args[@]} -eq 0 ]]; then
+    le "Missing script arguments"
+    help
+    exit 1
+fi
+
+set +e
+VALGRIND=$(which valgrind)
+set -e
+
+if [[ -z "${VALGRIND}" ]]; then
+    le "valgrind is not installed"
+    exit 1
+fi
+
+if [[ ! -e "${args[0]}" ]]; then
+    le "No executable found '${args[0]}'"
+    exit 1
+fi
+
+${VALGRIND} ${VALGRIND_OPTIONS} ${args[@]}
+exit $?
+
+########################################################################################################################
+########################################################################################################################

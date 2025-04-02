@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+source "$(dirname "$(readlink -f "$0")")"/functions.sh
+########################################################################################################################
+# Global variables"
+
+SCRIPT_VERSION="0.4.8"
+
+
+PROJECT=${PROJECT_NAME-$(${SCRIPT_PATH}/version project)}
+PROJECT_VERSION=${PROJECT_VERSION-$(${SCRIPT_PATH}/version version)}
+BUILD_PATH=.build
+SOURCE_PATH=.
+BUILD_CLEANUP=${BUILD_CLEANUP-1}
+BUILD_GENERATOR=${BUILD_GENERATOR-"Unix Makefiles"}
+
+########################################################################################################################
+# Help usage
+function help() {
+CAT <<EOF
+${SCRIPT_NAME} ${VERSION} helper script to build project by cmake using vcpkg or conan toolchain"
+
+Usage 
+    ${SCRIPT_NAME} [options] [cmake build_type os_version install_prefix]"
+    
+Options:
+    -h|--help           print help and exit"
+    -v|--version        print version and exit"
+    -d|--debug          verbose output"
+    --cmake             alias for cmake, default is cmake, could use cmake3 or cmake-3.22, etc"
+    --build-type        define build type for cmake: Release, Debug, Version"
+                        Version depend on project version, see scripts/version-check -h for details"
+    --build             build directory, default is .build"
+    --generator         cmake build generator, see cmake --help for list"
+    --no-build-cleanup  do not cleaup build directory if exists"
+    --source            source directory, default is current directory ."
+    --os                os name and its version, used for define conan profiles"
+    --prefix            install prefix, default is project directory"
+EOF
+}
+
+########################################################################################################################
+# Parse command line options
+
+function parse_cmd_args() {
+    while :; do
+        case "${1-}" in
+            -h|--help)
+                help
+                ;;
+            -v|--version)
+                version
+                ;;
+            -d|--debug)
+                set -x
+                ;;
+            --cmake)
+                shift
+                CMAKE=$1
+                ;;
+            --build-type)
+                shift
+                BUILD_TYPE="$1"
+                ;;
+            --build)
+                shift
+                BUILD_PATH="$1"
+                ;;
+            --generator)
+                shift
+                BUILD_GENERATOR="$1"
+                ;;
+            --no-build-cleanup)
+                BUILD_CLEANUP=0
+                ;;
+            --source)
+                shift
+                SOURCE_PATH=$1
+                ;;
+            --os)
+                shift
+                OS_PROJECT_VERSION=$1
+                ;;
+            --prefix)
+                shift
+                INSTALL_PREFIX=$1
+                ;;
+            *)
+                break ;;
+        esac
+        shift
+    done
+    args=($@)
+}
+
+########################################################################################################################
+# Main
+
+parse_cmd_args "$@"
+
+if [[ -z "${CMAKE-}" ]]; then
+    CMAKE=cmake
+fi
+if [[ -z "${BUILD_TYPE-}" ]]; then
+    BUILD_TYPE=Version
+fi
+if [[ -z "${OS_PROJECT_VERSION-}" ]]; then
+    OS_PROJECT_VERSION=Linux
+fi
+if [[ -z "${INSTALL_PREFIX-}" ]]; then
+    INSTALL_PREFIX=./
+fi
+
+if [[ "${BUILD_TYPE}" == "Version" ]]; then
+    BUILD_TYPE=$(${SCRIPT_PATH}/version_check -b $(${SCRIPT_PATH}/describe version))
+fi
+
+if [[ -z "${BUILD_PATH}" ]]; then
+    echo -e "${red}build path is not defined ${clre}"
+    exit 1
+fi
+
+if [[ -z "${SOURCE_PATH}" ]]; then
+    echo -e "${red}source path is not defined ${clre}"
+    exit 1
+fi
+
+BUILD_PATH=$(realpath "${BUILD_PATH}")
+SOURCE_PATH=$(realpath "${SOURCE_PATH}")
+
+if [[ "${BUILD_PATH}" = "${SOURCE_PATH}" ]]; then
+    echo -e "${red}build path and source path could not be the same '${BUILD_PATH}'${clre}"
+    exit 1
+fi
+
+# on branches main, master, devel always cleanup build path, to avoid troubles with cached .build
+# sometimes compiles code thats not worked correctly, sometimes failure to build source code
+# if source code or cmake is changed dramaticaly make branch with name contains version
+# or run this script without the option --no-build-cleanup or defined BUILD_CLEANUP=1 at .project
+
+if [[ ! -z "${CI_COMMIT_REF_SLUG-}" ]]; then
+    if [[ "${CI_COMMIT_REF_SLUG}" == "master" ]]; then
+        BUILD_CLEANUP=1
+    fi
+    if [[ "${CI_COMMIT_REF_SLUG}" == "main" ]]; then
+        BUILD_CLEANUP=1
+    fi
+    if [[ "${CI_COMMIT_REF_SLUG}" == "devel" ]]; then
+        BUILD_CLEANUP=1
+    fi
+fi
+
+if [[ -d "${BUILD_PATH}" && ${BUILD_CLEANUP} -eq 1 ]]; then
+    echo -e "${magenta}clean up build path '${BUILD_PATH}'${clre}"
+    rm -fR "${BUILD_PATH}"
+fi
+
+if [[ -f ${SOURCE_PATH}/vcpkg.json ]]; then
+    # Build using vcpkg toolchain
+    if [[ ! -f ${THIRD_LIBRARY_DIR}/vcpkg-master.zip || ! -d ${THIRD_LIBRARY_DIR}/vcpkg-master ]]; then
+        echo -e "Download vcpkg"
+        wget --quiet -O ${THIRD_LIBRARY_DIR}/vcpkg-master.zip \
+            https://github.com/microsoft/vcpkg/archive/refs/heads/master.zip
+        unzip -qq ${THIRD_LIBRARY_DIR}/vcpkg-master.zip -d ${THIRD_LIBRARY_DIR}
+    fi
+
+    if [[ ! -d ${PROJECT_DIR}/.vcpkg ]]; then
+        mkdir -p ${PROJECT_DIR}/.vcpkg
+        export HOME=${PROJECT_DIR}
+        ${THIRD_LIBRARY_DIR}/vcpkg-master/bootstrap-vcpkg.sh -disableMetrics
+        ${THIRD_LIBRARY_DIR}/vcpkg-master/vcpkg integrate install --vcpkg-root=${THIRD_LIBRARY_DIR}/vcpkg-master \
+            --disable-metrics
+    fi
+
+    $CMAKE -H${SOURCE_PATH} -B${BUILD_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -G "${BUILD_GENERATOR}" \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION} \
+        -DCMAKE_TOOLCHAIN_FILE=${THIRD_LIBRARY_DIR}/vcpkg-master/scripts/buildsystems/vcpkg.cmake
+
+else
+
+    if [[ -f ${SOURCE_PATH}/conanfile.txt || -f ${SOURCE_PATH}/conanfile.py ]]; then
+
+        if [[ "${BUILD_TYPE}" == "Release" ]]; then
+            CONAN_PROFILE=default
+        else
+            CONAN_PROFILE=debug
+        fi
+
+
+        if [[ -f scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
+            CONAN_PROFILE=scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
+        fi
+        if [[ -f build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
+            CONAN_PROFILE=build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
+        fi
+
+        # clean ceache
+        if [[ ${CONAN_CLEANUP-0} -eq 1 ]]; then
+            conan remove -c 'svc-*'
+            conan cache clean
+      fi
+
+        # Build using connan toolchain
+        conan install ${SOURCE_PATH}/ -of ${BUILD_PATH} -pr ${CONAN_PROFILE} \
+            --build missing --build=cascade --update
+
+        CONAN_TOOLCHAIN_FILE=conan_toolchain.cmake
+        if [[ ! -f ${BUILD_PATH}/${CONAN_TOOLCHAIN_FILE} ]]; then
+            CONAN_TOOLCHAIN_FILE=build/${BUILD_TYPE}/generators/conan_toolchain.cmake
+            if [[ ! -f ${BUILD_PATH}/${CONAN_TOOLCHAIN_FILE} ]]; then
+                echo -e "${red}no conan_toolchain.cmake file found at ${BUILD_PATH} neither "\
+                    "at ${BUILD_PATH}/${CONAN_TOOLCHAIN_FILE}${clre}"
+                exit 1
+            fi
+        fi
+
+        $CMAKE -H${SOURCE_PATH}/ -B${BUILD_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -G "${BUILD_GENERATOR}" \
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION} \
+            -DCMAKE_TOOLCHAIN_FILE=${CONAN_TOOLCHAIN_FILE}
+
+    else
+
+        # Build without toolchains
+        $CMAKE -H${SOURCE_PATH}/ -B${BUILD_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -G "${BUILD_GENERATOR}" \
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION}
+
+    fi
+fi
+
+$CMAKE --build ${BUILD_PATH} --config ${BUILD_TYPE}
+$CMAKE --install ${BUILD_PATH} --config ${BUILD_TYPE}
+
+exit 0
+########################################################################################################################
+########################################################################################################################
