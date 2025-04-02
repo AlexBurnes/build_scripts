@@ -5,7 +5,6 @@ source "$(dirname "$(readlink -f "$0")")"/functions.sh
 
 SCRIPT_VERSION="0.4.8"
 
-
 PROJECT=${PROJECT_NAME-$(${SCRIPT_PATH}/version project)}
 PROJECT_VERSION=${PROJECT_VERSION-$(${SCRIPT_PATH}/version version)}
 BUILD_PATH=.build
@@ -17,24 +16,26 @@ BUILD_GENERATOR=${BUILD_GENERATOR-"Unix Makefiles"}
 # Help usage
 function help() {
 CAT <<EOF
-${SCRIPT_NAME} ${VERSION} helper script to build project by cmake using vcpkg or conan toolchain"
+${SCRIPT_NAME} ${VERSION} helper script to build project by cmake
+If there is setting files for vcpkg or connan build using toolchain. If vcpkg is used then
+download and install it.
 
 Usage 
-    ${SCRIPT_NAME} [options] [cmake build_type os_version install_prefix]"
+    ${SCRIPT_NAME} [options] [cmake build_type os_version install_prefix]
     
 Options:
-    -h|--help           print help and exit"
-    -v|--version        print version and exit"
-    -d|--debug          verbose output"
-    --cmake             alias for cmake, default is cmake, could use cmake3 or cmake-3.22, etc"
-    --build-type        define build type for cmake: Release, Debug, Version"
-                        Version depend on project version, see scripts/version-check -h for details"
-    --build             build directory, default is .build"
-    --generator         cmake build generator, see cmake --help for list"
-    --no-build-cleanup  do not cleaup build directory if exists"
-    --source            source directory, default is current directory ."
-    --os                os name and its version, used for define conan profiles"
-    --prefix            install prefix, default is project directory"
+    -h|--help           print help and exit
+    -v|--version        print version and exit
+    -d|--debug          verbose output
+    --cmake             alias for cmake, default is cmake, could use cmake3 or cmake-3.22, etc
+    --build-type        define build type for cmake: Release, Debug, Version
+                        Version depend on project version, see scripts/version-check -h for details
+    --build             build directory, default is .build
+    --generator         cmake build generator, see cmake --help for list
+    --no-build-cleanup  do not cleaup build directory if exists
+    --source            source directory, default is current directory ./
+    --os                os name and its version, used for define conan profiles
+    --prefix            install prefix, default is project directory
 EOF
 }
 
