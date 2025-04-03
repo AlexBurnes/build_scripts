@@ -1,7 +1,23 @@
 #!/usr/bin/env bash
+# Collection of scripts to build and check C++ projects using build tools
+# Copyright 2025 AlexBurnes@gmail.com
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Minimal bash script implementation, based on
 #   (https://github.com/ralish/bash-script-template)[Bash script template]
 #   (https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/)[Safer bash scrtipts with set -Eeuo pipefail]
+
 ########################################################################################################################
 # set stricts and traps, this is must be always at beginig of the script
 set -o nounset     # exit if variable is unset

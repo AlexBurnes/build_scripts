@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+# Collection of scripts to build and check C++ projects using build tools
+# Copyright 2025 AlexBurnes@gmail.com
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 source "$(dirname "$(readlink -e "$0")")"/functions.sh
 
 ########################################################################################################################
@@ -8,8 +22,8 @@ VERSION="0.1.0"
 
 CPPCHECK_VERSION_DEFAULT="2.16.0"
 CPPCHECK_PREFIX_DEFAULT="/usr/local"
-CPPCHECK_OPTIONS_DEFAULT="--enable=all --inconclusive --error-exitcode=1 --check-level=exhaustive "\
-    "--force --checkers-report=cppcheck_report.txt"
+CPPCHECK_OPTIONS_DEFAULT="--enable=all --inconclusive --error-exitcode=1 --check-level=exhaustive \
+    --force --checkers-report=cppcheck_report.txt"
 CPPCHECK_INCLUDE_FILE_DEFAULT="cppcheck_include.txt"
 CPPCHECK_SUPPRESS_FILE_DEFAULT="cppcheck_suppress.txt"
 
@@ -171,7 +185,7 @@ if [[ ! -e ${CPPCHECK_CMD} ]]; then
     exit 1
 fi
 
-cd ${PROJECT_DIR}
+cd "${PROJECT_DIR}"
 
 if [[ -z "${CPPCHECK_INCLUDES-}" ]]; then
     if [[ -d "src/include" ]]; then

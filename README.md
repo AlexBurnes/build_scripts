@@ -1,11 +1,10 @@
-## Abstract
+## Collection of scripts to build and check C++ projects using build tools
 
-Collection of bash scripts used for check and build C++ projects.
-Run tools: cmake, conan, cppcheck, clang-format others.
+Collection of bash scripts used for check and build C++ projects using build tools: cmake, vcpkg, conan, cppcheck, clang-format.
 
 ## Version
 
-0.1.0
+0.1.1
 
 # Usage
 
@@ -28,3 +27,8 @@ Add as submodule
 # Changelog
 
 See [CHANGELOG](CHANGELOG.md)
+
+# License
+
+This scripts is distributed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0), see [LICENSE](https://github.com:AlexBurnes/build_scripts/blob/master/LICENSE) for more information.
+
