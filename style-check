@@ -186,15 +186,28 @@ fi
 tmpfile="tmpfile.$RANDOM"
 echo -e "Style check format \"${STYLE_FILE}\""
 
+if [[ -f ".styleignore" ]]; then
+    SOURCE_DIRECTORIES="$(find ${dirs[@]} -type d)"
+    dirs=()
+    ld "directories: ${SOURCE_DIRECTORIES}"
+    for dir in $(echo ${SOURCE_DIRECTORIES}); do
+        ld "check directory ${dir}"
+        ignore_dir=$(cat .styleignore | grep -e "^${dir}\$" | wc | awk '{print $1}')
+        ld "ignore dir ${ignore_dir}?"
+        if [[ ${ignore_dir} -eq 0 ]]; then
+           dirs+=("${dir}")
+        fi
+    done
+fi
+ld "directories to check ${dirs[@]}"
+
 for dir in ${dirs[@]}; do
-    echo -e "check style at ${PROJECT_DIR}/${dir}"
-    find "${PROJECT_DIR}/${dir}" -iname "*.cpp" -o -iname "*.hpp" >> "$tmpfile"
-    find "${PROJECT_DIR}/${dir}" -iname "*.c" -o -iname "*.h" >> "$tmpfile"
+    ld "check style at ${PROJECT_DIR}/${dir}"
+    find "${PROJECT_DIR}/${dir}" -maxdepth 1 -iname "*.cpp" -o -iname "*.hpp" >> "$tmpfile"
+    find "${PROJECT_DIR}/${dir}" -maxdepth 1 -iname "*.c" -o -iname "*.h" >> "$tmpfile"
 done
 ec=0
 while read -r file; do
-
-    #FIXME check .styleignore 
 
     if [[ ${CLANG_FORMAT_FIX} -eq 0 ]]; then
         clang_format "$file"

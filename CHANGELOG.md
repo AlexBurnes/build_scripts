@@ -12,3 +12,9 @@ Initial version
 
 # Fixed
 - some scripts quiote variables with path containing spaces
+
+# [v0.1.2] - 2025-04-03
+
+# Added
+- style-check do no check source code for directories exists in .styleignore
+

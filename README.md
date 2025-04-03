@@ -4,7 +4,7 @@ Collection of bash scripts used for check and build C++ projects using build too
 
 ## Version
 
-0.1.1
+0.1.2
 
 # Usage
 
