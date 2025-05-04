@@ -126,7 +126,7 @@ if [[ -z "${INSTALL_PREFIX-}" ]]; then
 fi
 
 if [[ "${BUILD_TYPE}" == "Version" ]]; then
-    BUILD_TYPE=$(${SCRIPT_PATH}/version_check -b $(${SCRIPT_PATH}/describe version))
+    BUILD_TYPE=$(${SCRIPT_PATH}/version-check -b $(${SCRIPT_PATH}/version version))
 fi
 
 if [[ -z "${BUILD_PATH}" ]]; then
