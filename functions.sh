@@ -25,6 +25,7 @@ SCRIPT="$(readlink -f "$0")"
 SCRIPT_NAME=$(basename "${SCRIPT}")
 SCRIPT_PATH="$(dirname "${SCRIPT}")"
 PROJECT_DIR="${PWD}"
+[[ -f "${PROJECT_DIR}/.project" ]] && source "${PROJECT_DIR}/.project"
 
 trap cleanup_ SIGINT SIGTERM EXIT
 cleanup_() {

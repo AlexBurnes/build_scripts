@@ -19,18 +19,21 @@ source "$(dirname "$(readlink -f "$0")")"/functions.sh
 
 SCRIPT_VERSION="0.4.8"
 
-PROJECT=${PROJECT_NAME-$(${SCRIPT_PATH}/version project)}
-PROJECT_VERSION=${PROJECT_VERSION-$(${SCRIPT_PATH}/version version)}
+PROJECT=${PROJECT_NAME-$("${SCRIPT_PATH}"/version project)}
+PROJECT_VERSION=${PROJECT_VERSION-$("${SCRIPT_PATH}"/version version)}
 BUILD_PATH=.build
 SOURCE_PATH=.
 BUILD_CLEANUP=${BUILD_CLEANUP-1}
 BUILD_GENERATOR=${BUILD_GENERATOR-"Unix Makefiles"}
+CXX=${CXX-g++}
+CC=${CC-gcc}
+export CXX CC
 
 ########################################################################################################################
 # Help usage
 function help() {
-CAT <<EOF
-${SCRIPT_NAME} ${VERSION} helper script to build project by cmake
+cat <<EOF
+${SCRIPT_NAME} ${SCRIPT_VERSION} helper script to build project by cmake
 If there is setting files for vcpkg or connan build using toolchain. If vcpkg is used then
 download and install it.
 
@@ -39,8 +42,9 @@ Usage
     
 Options:
     -h|--help           print help and exit
-    -v|--version        print version and exit
-    -d|--debug          verbose output
+    -V|--version        print version and exit
+    -v|--verbose        verbose output
+    -d|--debug          debug output
     --cmake             alias for cmake, default is cmake, could use cmake3 or cmake-3.22, etc
     --build-type        define build type for cmake: Release, Debug, Version
                         Version depend on project version, see scripts/version-check -h for details
@@ -50,6 +54,17 @@ Options:
     --source            source directory, default is current directory ./
     --os                os name and its version, used for define conan profiles
     --prefix            install prefix, default is project directory
+
+Environment:
+    PROJECT             "${PROJECT}"
+    PROJECT_VERSION     "${PROJECT_VERSION}"
+    BUILD_PATH          "${BUILD_PATH}"
+    BUILD_CLEANUP       "${BUILD_CLEANUP}"
+    BUILD_GENERATOR     "${BUILD_GENERATOR}"
+    CXX                 "${CXX-}"
+    CC                  "${CC-}"
+    CONAN_CLEANUP       "${CONAN_CLEANUP-}"
+    CONAN_OPTIONS       "${CONAN_OPTIONS-}"
 EOF
 }
 
@@ -61,12 +76,21 @@ function parse_cmd_args() {
         case "${1-}" in
             -h|--help)
                 help
+                exit 0
                 ;;
-            -v|--version)
-                version
+            -V)
+                lg "${VERSION}"
+                exit 0
+                ;;
+            --version)
+                lg "${SCRIPT_NAME} ${VERSION}"
+                exit 0
+                ;;
+            -v|--verbose)
+                set -x
                 ;;
             -d|--debug)
-                set -x
+                DEBUG=1
                 ;;
             --cmake)
                 shift
@@ -203,19 +227,20 @@ else
 
         if [[ -f scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
             CONAN_PROFILE=scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
-        fi
-        if [[ -f build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
+        elif [[ -f build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
             CONAN_PROFILE=build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
+        else
+            conan profile detect --name ${CONAN_PROFILE} -f
         fi
 
-        # clean ceache
+        # clean cache
         if [[ ${CONAN_CLEANUP-0} -eq 1 ]]; then
             conan remove -c 'svc-*'
             conan cache clean
       fi
 
         # Build using connan toolchain
-        conan install ${SOURCE_PATH}/ -of ${BUILD_PATH} -pr ${CONAN_PROFILE} \
+        conan install ${SOURCE_PATH}/ -of ${BUILD_PATH} -pr:h ${CONAN_PROFILE} -pr:b ${CONAN_PROFILE} ${CONAN_OPTIONS-} -s "build_type=$BUILD_TYPE" \
             --build missing --build=cascade --update
 
         CONAN_TOOLCHAIN_FILE=conan_toolchain.cmake
@@ -225,17 +250,22 @@ else
                 echo -e "${red}no conan_toolchain.cmake file found at ${BUILD_PATH} neither at ${BUILD_PATH}/${CONAN_TOOLCHAIN_FILE}${clre}"
                 exit 1
             fi
+            source ${BUILD_PATH}/build/${BUILD_TYPE}/generators/conanbuild.sh
+        else
+            source ${BUILD_PATH}/conanbuild.sh
         fi
 
         $CMAKE -H${SOURCE_PATH}/ -B${BUILD_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -G "${BUILD_GENERATOR}" \
             -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION} \
+            -DCMAKE_CXX_COMPILER="${CXX}" -D CMAKE_CC_COMPILER="${CC}" \
             -DCMAKE_TOOLCHAIN_FILE=${CONAN_TOOLCHAIN_FILE}
 
     else
 
         # Build without toolchains
         $CMAKE -H${SOURCE_PATH}/ -B${BUILD_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -G "${BUILD_GENERATOR}" \
-            -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION}
+            -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DPROJECT_VERSION=${PROJECT_VERSION} \
+            -DCMAKE_CXX_COMPILER="${CXX}" -D CMAKE_CC_COMPILER="${CC}"
 
     fi
 fi
