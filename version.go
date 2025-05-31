@@ -219,18 +219,20 @@ func getRelease() (string, error) {
 	if !useRelease {
 		return "1", nil
 	}
-	
-	output, err := runGitCommand("describe", "--match", "v[0-9]*", "--abbrev=2", "--tags", "HEAD")
+
+	// Get the current tag
+	tag, err := runCommand("git", "describe", "--match", "v[0-9]*", "--abbrev=0", "--tags")
 	if err != nil {
 		return "", err
 	}
-	
-	re := regexp.MustCompile(`-([0-9]+)-g[a-f0-9]+$`)
-	matches := re.FindStringSubmatch(output)
-	if len(matches) > 1 {
-		return matches[1], nil
+
+	// Count commits since that tag
+	output, err := runCommand("git", "rev-list", tag + "..HEAD", "--count")
+	if err != nil {
+		return "", err
 	}
-	return "0", nil
+
+	return strings.TrimSpace(output), nil
 }
 
 func getFull() (string, error) {
