@@ -226,7 +226,9 @@ else
             CONAN_PROFILE=debug
         fi
 
-        CONAN_HOME=${CONAN_HOME-${CONAN2_PATH-"~/.conan2"}}
+        if [[ -z "${CONAN_HOME-}" ]]; then
+            CONAN_HOME=~/.conan2
+        fi
 
         if [[ -f scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
             CONAN_PROFILE=scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
