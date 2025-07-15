@@ -153,6 +153,8 @@ if [[ "${BUILD_TYPE}" == "Version" ]]; then
     BUILD_TYPE=$(${SCRIPT_PATH}/version-check -b $(${SCRIPT_PATH}/version version))
 fi
 
+build_type=$(echo ${BUILD_TYPE} | awk '{print tolower($0)}')
+
 if [[ -z "${BUILD_PATH}" ]]; then
     echo -e "${red}build path is not defined ${clre}"
     exit 1
@@ -224,12 +226,15 @@ else
             CONAN_PROFILE=debug
         fi
 
+        CONAN_HOME=${CONAN_HOME-${CONAN2_PATH-"~/.conan2"}}
 
         if [[ -f scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
             CONAN_PROFILE=scripts/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
         elif [[ -f build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE} ]]; then
             CONAN_PROFILE=build/${OS_PROJECT_VERSION}/conan/${BUILD_TYPE}
-        else
+        elif [[ -f "${CONAN_HOME}/profiles/${CONAN_PROFILE}" ]]; then
+            CONAN_PROFILE=${CONAN_PROFILE}
+        else 
             conan profile detect --name ${CONAN_PROFILE} -f
         fi
 
